@@ -59,7 +59,7 @@ jobs:
         with:
           repository: verademo-java
           default-runs-on: ubuntu-latest
-          runs-on-mapping-yaml: runs-on-mapping.yaml          
+          runs-on-mapping-yaml: runs-on-mapping.yaml
 
       - name: Print Output
         id: output
