@@ -57,8 +57,10 @@ jobs:
         id: test-action
         uses: ./
         with:
-          milliseconds: 2000
+          repository: verademo-java
+          default-runs-on: ubuntu-latest
+          runs-on-mapping-yaml: runs-on-mapping.yaml          
 
       - name: Print Output
         id: output
-        run: echo "${{ steps.test-action.outputs.time }}"
+        run: echo "${{ steps.test-action.outputs.runs_on }}"
