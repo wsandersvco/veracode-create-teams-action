@@ -64720,7 +64720,7 @@ async function run() {
         debug(`mapping_yaml type: ${typeof mapping_yaml}`);
         debug(`mapping_yaml keys: ${Object.keys(mapping_yaml)}`);
         debug(`mapping_yaml schema: ${JSON.stringify(mapping_yaml, null, 2)}`);
-        let runs_on = default_runs_on;
+        let runs_on = default_runs_on.replace(/'/g, '"')[0];
         for (const [key, repositories] of Object.entries(mapping_yaml)) {
             // validate runs-on key contains an array
             if (!Array.isArray(repositories)) {

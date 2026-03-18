@@ -25,7 +25,7 @@ inputs:
       Branch, tag, or commit SHA to fetch from (optional, defaults to default
       branch)
     required: false
-  default-runs-on:
+  default-runs-on: # formatted as [ 'ubuntu-latest' ]
     description: Default runs_on value from veracode workflow inputs
     required: true
   runs-on-mapping-yaml:
