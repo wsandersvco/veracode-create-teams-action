@@ -165,7 +165,8 @@ steps:
 ```
 
 For example workflow runs, check out the
-[Actions tab](https://github.com/wsandersvc/select-runs-on-action/actions)! :rocket:
+[Actions tab](https://github.com/wsandersvc/select-runs-on-action/actions)!
+:rocket:
 
 ## Usage
 
