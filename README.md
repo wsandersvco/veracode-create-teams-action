@@ -43,7 +43,7 @@ runs_on_validations:
         runs-on-mapping-yaml: runs-on-mapping.yaml
 ```
 
-Optionally define the following if the mapping yaml file resides in a custom
+Optionally define the following if the mapping YAML file resides in a custom
 location.
 
 ```yaml
