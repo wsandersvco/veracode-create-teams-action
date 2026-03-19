@@ -6,6 +6,9 @@
 ![CodeQL](https://github.com/wsandersvc/select-runs-on-action/actions/workflows/codeql-analysis.yml/badge.svg)
 ![Coverage](./badges/coverage.svg)
 
+## Roadmap
+- Specify configuration repository.
+
 ## Initial Setup
 
 > [!NOTE]
