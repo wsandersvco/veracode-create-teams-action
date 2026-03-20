@@ -64661,6 +64661,21 @@ var jsYaml = {
 	safeDump: safeDump
 };
 
+/**
+ * Parses the GitHub Actions default-runs-on input format.
+ *
+ * GitHub Actions passes runner arrays with single quotes (e.g., "[ 'ubuntu-latest' ]")
+ * which is not valid JSON. This function normalizes the format by replacing single
+ * quotes with double quotes and validates that the input contains exactly one runner.
+ *
+ * @param input - String in the format "[ 'runner-name' ]" with single quotes
+ * @returns The runner name extracted from the array as a string
+ * @throws {Error} If the format is invalid, not an array, doesn't contain exactly 1 element, or element is not a string
+ *
+ * @example
+ * parseDefaultRunsOn("[ 'ubuntu-latest' ]")  // Returns: "ubuntu-latest"
+ * parseDefaultRunsOn("[ 'windows-latest' ]") // Returns: "windows-latest"
+ */
 function parseDefaultRunsOn(input) {
     try {
         // Add comment explaining why this is needed
@@ -64682,6 +64697,28 @@ function parseDefaultRunsOn(input) {
         });
     }
 }
+/**
+ * Fetches a file from a GitHub repository using the GitHub API.
+ *
+ * This function retrieves file content from a specified repository and path,
+ * validates that the path points to a file (not a directory), checks rate limits,
+ * and decodes the base64-encoded content returned by the GitHub API.
+ *
+ * @param options - Configuration object containing repository details
+ * @param options.owner - GitHub repository owner (username or organization)
+ * @param options.repository - GitHub repository name where the file is located
+ * @param options.path - Path to the file within the repository
+ * @param options.ref - Optional git reference (branch, tag, or commit SHA). If not provided, uses default branch
+ * @param octokit - Authenticated Octokit instance for making GitHub API calls
+ * @returns Promise that resolves to the decoded file content as a UTF-8 string
+ * @throws {Error} If the file cannot be fetched, the path is a directory, or API call fails
+ *
+ * @example
+ * const content = await fetchFileFromRepo(
+ *   { owner: 'myorg', repository: 'config', path: 'runners.yaml', ref: 'main' },
+ *   octokit
+ * )
+ */
 async function fetchFileFromRepo(options, octokit) {
     const { owner, path, ref, repository } = options;
     try {
@@ -64711,6 +64748,33 @@ async function fetchFileFromRepo(options, octokit) {
         throw new Error(`Failed to fetch file from ${owner}/${repository}/${path}: ${err.message}`, { cause: error$1 });
     }
 }
+/**
+ * Validates the structure and content of the runs-on mapping YAML data.
+ *
+ * This function performs runtime validation of the parsed YAML data to ensure
+ * it matches the expected structure (object with string array values). It gracefully
+ * handles invalid entries by warning about them and continuing validation rather
+ * than failing completely. This allows partial configurations to work.
+ *
+ * @param data - Parsed YAML data of unknown type (for safety)
+ * @returns Validated mapping object containing only valid entries
+ * @throws {Error} If data is not an object, or if no valid mappings are found after validation
+ *
+ * @example
+ * const mapping = validateMapping({
+ *   'ubuntu-latest': ['repo1', 'repo2'],
+ *   'windows-latest': ['repo3']
+ * })
+ * // Returns: { 'ubuntu-latest': ['repo1', 'repo2'], 'windows-latest': ['repo3'] }
+ *
+ * @example
+ * // With invalid entries (logs warnings but continues)
+ * const mapping = validateMapping({
+ *   'ubuntu-latest': ['repo1'],
+ *   'invalid-key': 'not-an-array'  // Skipped with warning
+ * })
+ * // Returns: { 'ubuntu-latest': ['repo1'] }
+ */
 function validateMapping(data) {
     if (typeof data !== 'object' || data === null || Array.isArray(data)) {
         throw new Error('Mapping YAML must be an object');
@@ -64732,6 +64796,37 @@ function validateMapping(data) {
     }
     return validated;
 }
+/**
+ * Selects the appropriate runner for a repository based on the mapping configuration.
+ *
+ * This function searches through the validated mapping to find which runner group
+ * contains the specified repository. If found, it returns that runner name.
+ * If not found in any group, it falls back to the default runner.
+ *
+ * The function stops at the first match, so if a repository appears in multiple
+ * runner groups, the first one encountered will be used.
+ *
+ * @param mapping - Validated runs-on mapping object (runner names to repository lists)
+ * @param repository - Name of the repository to find a runner for
+ * @param defaultRunner - Fallback runner name to use if repository is not found in any group
+ * @returns The selected runner name (either matched or default)
+ *
+ * @example
+ * const runner = selectRunner(
+ *   { 'ubuntu-latest': ['repo1', 'repo2'], 'windows-latest': ['repo3'] },
+ *   'repo2',
+ *   'ubuntu-latest'
+ * )
+ * // Returns: 'ubuntu-latest' (found in mapping)
+ *
+ * @example
+ * const runner = selectRunner(
+ *   { 'ubuntu-latest': ['repo1'] },
+ *   'unknown-repo',
+ *   'macos-latest'
+ * )
+ * // Returns: 'macos-latest' (not found, uses default)
+ */
 function selectRunner(mapping, repository, defaultRunner) {
     for (const [runnerName, repositories] of Object.entries(mapping)) {
         if (repositories.includes(repository)) {
