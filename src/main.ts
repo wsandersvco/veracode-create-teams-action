@@ -1,20 +1,58 @@
 import * as core from '@actions/core'
 import { getOctokit } from '@actions/github'
-import yaml from 'js-yaml'
+import yaml, { FAILSAFE_SCHEMA } from 'js-yaml'
 
-interface FetchFileOptions {
-  owner: string
-  repository: string
-  path: string
-  ref?: string
-  token: string
+type Octokit = ReturnType<typeof getOctokit>
+
+interface RunsOnMapping {
+  [runnerName: string]: string[]
 }
 
-async function fetchFileFromRepo(options: FetchFileOptions): Promise<string> {
-  const { owner, repository, path, ref, token } = options
+function parseDefaultRunsOn(input: string): string {
+  try {
+    // Add comment explaining why this is needed
+    // GitHub Actions passes arrays with single quotes, e.g., "[ 'ubuntu-latest' ]"
+    // We need to convert to valid JSON format
+    const normalized = input.replace(/'/g, '"')
+    const parsed = JSON.parse(normalized)
+
+    if (!Array.isArray(parsed) || parsed.length !== 1) {
+      throw new Error('Must be a non-empty array with 1 element')
+    }
+
+    if (typeof parsed[0] !== 'string') {
+      throw new Error('Array must contain a string')
+    }
+
+    return parsed[0]
+  } catch (error) {
+    throw new Error(
+      `Invalid default-runs-on-format ${(error as Error).message}`,
+      {
+        cause: error
+      }
+    )
+  }
+}
+
+async function fetchFileFromRepo(
+  options: {
+    owner: string
+    path: string
+    ref: string | undefined
+    repository: string
+  },
+  octokit: Octokit
+): Promise<string> {
+  const { owner, path, ref, repository } = options
 
   try {
-    const octokit = getOctokit(token)
+    // Check rate limit
+    const rateLimit = await octokit.rest.rateLimit.get()
+    core.debug(
+      `Rate limit remaining: ${rateLimit.data.rate.remaining}/${rateLimit.data.rate.limit}`
+    )
+    core.debug(`Rate limit reset: ${rateLimit.data.rate.reset}`)
 
     core.info(
       `Fetching file: ${path} from ${owner}/${repository}${ref ? ` (ref: ${ref})` : ''}`
@@ -22,13 +60,18 @@ async function fetchFileFromRepo(options: FetchFileOptions): Promise<string> {
 
     const response = await octokit.rest.repos.getContent({
       owner,
-      repo: repository,
       path,
+      repo: repository,
       ...(ref && { ref })
     })
 
+    core.debug(JSON.stringify(response, null, 2))
+
+    // Validate API response is valid and for GitHub file, not directory
     if (!('content' in response.data) || Array.isArray(response.data)) {
-      throw new Error(`Path ${path} is not a file`)
+      throw new Error(
+        `Path ${owner}/${repository}/${path}${ref ? ` (ref: ${ref})` : ''} is a directory, not a file`
+      )
     }
 
     const content = Buffer.from(response.data.content, 'base64').toString(
@@ -38,18 +81,58 @@ async function fetchFileFromRepo(options: FetchFileOptions): Promise<string> {
     core.info(`Successfully fetched file (${response.data.size} bytes)`)
     return content
   } catch (error) {
-    if (error instanceof Error) {
-      core.error(`Failed to fetch file: ${error.message}`)
-      throw new Error(
-        `Failed to fetch ${path} from ${owner}/${repository}: ${error.message}`,
-        { cause: error }
-      )
-    }
-    throw new Error('Unknown error', { cause: error })
+    const err = error as Error
+    core.error(`Failed to fetch file: ${err.message}`)
+    throw new Error(
+      `Failed to fetch file from ${owner}/${repository}/${path}: ${err.message}`,
+      { cause: error }
+    )
   }
 }
-export const test = {
-  fetchFileFromRepo
+
+function validateMapping(data: unknown): RunsOnMapping {
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+    throw new Error('Mapping YAML must be an object')
+  }
+
+  const validated: RunsOnMapping = {}
+  for (const [key, value] of Object.entries(data)) {
+    if (!Array.isArray(value)) {
+      core.warning(`Skipping key "${key}": value is not an array`)
+      continue
+    }
+
+    if (!value.every((item) => typeof item === 'string')) {
+      core.warning(`Skipping key "${key}": array contains non-string values`)
+      continue
+    }
+
+    validated[key] = value
+  }
+
+  if (Object.keys(validated).length === 0) {
+    throw new Error('No valid runner mappings found in YAML file')
+  }
+  return validated
+}
+
+function selectRunner(
+  mapping: RunsOnMapping,
+  repository: string,
+  defaultRunner: string
+): string {
+  for (const [runnerName, repositories] of Object.entries(mapping)) {
+    if (repositories.includes(repository)) {
+      core.info(
+        `Found repository "${repository}" in runs-on group: ${runnerName}`
+      )
+      return runnerName
+    }
+  }
+  core.info(
+    `Repository "${repository}" not found in mapping, using default: ${defaultRunner}`
+  )
+  return defaultRunner
 }
 
 /**
@@ -59,65 +142,48 @@ export const test = {
  */
 export async function run(): Promise<void> {
   try {
-    const mapping_path = core.getInput('runs-on-mapping-yaml', {
-      required: true
-    })
-    const github_token = core.getInput('github-token', { required: true })
-    const owner = core.getInput('owner', { required: true })
-    const repository = core.getInput('repository', { required: true })
-    const config_repository = core.getInput('config-repository', {
-      required: false
-    })
-    const ref = core.getInput('ref')
-    const default_runs_on = core.getInput('default-runs-on', { required: true })
-
-    core.info(`Loading runs-on-mapping-yaml from ${mapping_path}`)
-    const file_content = await fetchFileFromRepo({
-      owner: owner,
-      repository: config_repository,
-      path: mapping_path,
-      ref,
-      token: github_token
-    }).catch((error) => {
-      const message = `Failed to fetch mapping file from ${owner}/${config_repository}/${mapping_path}`
-      core.error(message)
-      throw new Error(message, { cause: error })
-    })
-
-    // throws YAMLException on failure
-    const mapping_yaml = yaml.load(file_content) as {
-      [runs_on: string]: string[]
+    const inputs = {
+      configRepository: core.getInput('config-repository', {
+        required: false
+      }),
+      defaultRunsOn: core.getInput('default-runs-on', { required: true }),
+      githubToken: core.getInput('github-token', { required: true }),
+      mappingPath: core.getInput('runs-on-mapping-yaml', { required: true }),
+      owner: core.getInput('owner', { required: true }),
+      ref: core.getInput('ref', { required: false }),
+      repository: core.getInput('repository', { required: true })
     }
 
-    // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
-    core.debug(`mapping_yaml type: ${typeof mapping_yaml}`)
-    core.debug(`mapping_yaml keys: ${Object.keys(mapping_yaml)}`)
-    core.debug(`mapping_yaml schema: ${JSON.stringify(mapping_yaml, null, 2)}`)
+    const octokit = getOctokit(inputs.githubToken)
 
-    let runs_on = JSON.parse(default_runs_on.replace(/'/g, '"'))[0]
-    for (const [key, repositories] of Object.entries(mapping_yaml)) {
-      // validate runs-on key contains an array
-      if (!Array.isArray(repositories)) {
-        core.warning(`Skipping key "${key}": value is not an array`)
-        continue
-      }
+    const defaultRunner = parseDefaultRunsOn(inputs.defaultRunsOn)
 
-      if (repositories.includes(repository)) {
-        runs_on = key
-        core.info(`Found repository "${repository}" in runs_on group: ${key}`)
-        break
-      }
-    }
+    core.info(
+      `Loading runs-on-mapping-yaml from ${inputs.owner}/${inputs.configRepository}/${inputs.mappingPath}${inputs.ref ? ` (ref: ${inputs.ref})` : ''}`
+    )
+    const fileContent = await fetchFileFromRepo(
+      {
+        owner: inputs.owner,
+        path: inputs.mappingPath,
+        ref: inputs.ref || undefined,
+        repository: inputs.configRepository
+      },
+      octokit
+    )
 
-    core.info(`Using runs_on value: ${runs_on}`)
+    const rawMapping = yaml.load(fileContent, { schema: FAILSAFE_SCHEMA })
+    const mapping = validateMapping(rawMapping)
+    core.debug(JSON.stringify(mapping, null, 2))
 
-    // Set outputs for other workflow steps to use
-    core.setOutput('runs-on', `['${runs_on}']`)
+    const selectedRunner = selectRunner(
+      mapping,
+      inputs.repository,
+      defaultRunner
+    )
+
+    core.info(`Using runs-on value: ${selectedRunner}`)
+    core.setOutput('runs-on', `['${selectedRunner}']`)
   } catch (error) {
-    // Fail the workflow run if an error occurs
-    core.debug(JSON.stringify(error, null, 2))
-    const message =
-      error instanceof Error ? `${error.name}: ${error.message}` : String(error)
-    core.setFailed(message)
+    core.setFailed((error as Error).message)
   }
 }

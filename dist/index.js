@@ -64661,31 +64661,86 @@ var jsYaml = {
 	safeDump: safeDump
 };
 
-async function fetchFileFromRepo(options) {
-    const { owner, repository, path, ref, token } = options;
+function parseDefaultRunsOn(input) {
     try {
-        const octokit = getOctokit(token);
+        // Add comment explaining why this is needed
+        // GitHub Actions passes arrays with single quotes, e.g., "[ 'ubuntu-latest' ]"
+        // We need to convert to valid JSON format
+        const normalized = input.replace(/'/g, '"');
+        const parsed = JSON.parse(normalized);
+        if (!Array.isArray(parsed) || parsed.length !== 1) {
+            throw new Error('Must be a non-empty array with 1 element');
+        }
+        if (typeof parsed[0] !== 'string') {
+            throw new Error('Array must contain a string');
+        }
+        return parsed[0];
+    }
+    catch (error) {
+        throw new Error(`Invalid default-runs-on-format ${error.message}`, {
+            cause: error
+        });
+    }
+}
+async function fetchFileFromRepo(options, octokit) {
+    const { owner, path, ref, repository } = options;
+    try {
+        // Check rate limit
+        const rateLimit = await octokit.rest.rateLimit.get();
+        debug(`Rate limit remaining: ${rateLimit.data.rate.remaining}/${rateLimit.data.rate.limit}`);
+        debug(`Rate limit reset: ${rateLimit.data.rate.reset}`);
         info(`Fetching file: ${path} from ${owner}/${repository}${ref ? ` (ref: ${ref})` : ''}`);
         const response = await octokit.rest.repos.getContent({
             owner,
-            repo: repository,
             path,
+            repo: repository,
             ...(ref && { ref })
         });
+        debug(JSON.stringify(response, null, 2));
+        // Validate API response is valid and for GitHub file, not directory
         if (!('content' in response.data) || Array.isArray(response.data)) {
-            throw new Error(`Path ${path} is not a file`);
+            throw new Error(`Path ${owner}/${repository}/${path}${ref ? ` (ref: ${ref})` : ''} is a directory, not a file`);
         }
         const content = Buffer.from(response.data.content, 'base64').toString('utf-8');
         info(`Successfully fetched file (${response.data.size} bytes)`);
         return content;
     }
     catch (error$1) {
-        if (error$1 instanceof Error) {
-            error(`Failed to fetch file: ${error$1.message}`);
-            throw new Error(`Failed to fetch ${path} from ${owner}/${repository}: ${error$1.message}`, { cause: error$1 });
-        }
-        throw new Error('Unknown error', { cause: error$1 });
+        const err = error$1;
+        error(`Failed to fetch file: ${err.message}`);
+        throw new Error(`Failed to fetch file from ${owner}/${repository}/${path}: ${err.message}`, { cause: error$1 });
     }
+}
+function validateMapping(data) {
+    if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+        throw new Error('Mapping YAML must be an object');
+    }
+    const validated = {};
+    for (const [key, value] of Object.entries(data)) {
+        if (!Array.isArray(value)) {
+            warning(`Skipping key "${key}": value is not an array`);
+            continue;
+        }
+        if (!value.every((item) => typeof item === 'string')) {
+            warning(`Skipping key "${key}": array contains non-string values`);
+            continue;
+        }
+        validated[key] = value;
+    }
+    if (Object.keys(validated).length === 0) {
+        throw new Error('No valid runner mappings found in YAML file');
+    }
+    return validated;
+}
+function selectRunner(mapping, repository, defaultRunner) {
+    for (const [runnerName, repositories] of Object.entries(mapping)) {
+        if (repositories.includes(repository)) {
+            info(`Found repository "${repository}" in runs-on group: ${runnerName}`);
+            return runnerName;
+        }
+    }
+    info(`Repository "${repository}" not found in mapping, using default: ${defaultRunner}`);
+    return defaultRunner;
 }
 /**
  * The main function for the action.
@@ -64694,57 +64749,35 @@ async function fetchFileFromRepo(options) {
  */
 async function run() {
     try {
-        const mapping_path = getInput('runs-on-mapping-yaml', {
-            required: true
-        });
-        const github_token = getInput('github-token', { required: true });
-        const owner = getInput('owner', { required: true });
-        const repository = getInput('repository', { required: true });
-        const config_repository = getInput('config-repository', {
-            required: false
-        });
-        const ref = getInput('ref');
-        const default_runs_on = getInput('default-runs-on', { required: true });
-        info(`Loading runs-on-mapping-yaml from ${mapping_path}`);
-        const file_content = await fetchFileFromRepo({
-            owner: owner,
-            repository: config_repository,
-            path: mapping_path,
-            ref,
-            token: github_token
-        }).catch((error$1) => {
-            const message = `Failed to fetch mapping file from ${owner}/${config_repository}/${mapping_path}`;
-            error(message);
-            throw new Error(message, { cause: error$1 });
-        });
-        // throws YAMLException on failure
-        const mapping_yaml = jsYaml.load(file_content);
-        // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
-        debug(`mapping_yaml type: ${typeof mapping_yaml}`);
-        debug(`mapping_yaml keys: ${Object.keys(mapping_yaml)}`);
-        debug(`mapping_yaml schema: ${JSON.stringify(mapping_yaml, null, 2)}`);
-        let runs_on = JSON.parse(default_runs_on.replace(/'/g, '"'))[0];
-        for (const [key, repositories] of Object.entries(mapping_yaml)) {
-            // validate runs-on key contains an array
-            if (!Array.isArray(repositories)) {
-                warning(`Skipping key "${key}": value is not an array`);
-                continue;
-            }
-            if (repositories.includes(repository)) {
-                runs_on = key;
-                info(`Found repository "${repository}" in runs_on group: ${key}`);
-                break;
-            }
-        }
-        info(`Using runs_on value: ${runs_on}`);
-        // Set outputs for other workflow steps to use
-        setOutput('runs-on', `['${runs_on}']`);
+        const inputs = {
+            configRepository: getInput('config-repository', {
+                required: false
+            }),
+            defaultRunsOn: getInput('default-runs-on', { required: true }),
+            githubToken: getInput('github-token', { required: true }),
+            mappingPath: getInput('runs-on-mapping-yaml', { required: true }),
+            owner: getInput('owner', { required: true }),
+            ref: getInput('ref', { required: false }),
+            repository: getInput('repository', { required: true })
+        };
+        const octokit = getOctokit(inputs.githubToken);
+        const defaultRunner = parseDefaultRunsOn(inputs.defaultRunsOn);
+        info(`Loading runs-on-mapping-yaml from ${inputs.owner}/${inputs.configRepository}/${inputs.mappingPath}${inputs.ref ? ` (ref: ${inputs.ref})` : ''}`);
+        const fileContent = await fetchFileFromRepo({
+            owner: inputs.owner,
+            path: inputs.mappingPath,
+            ref: inputs.ref || undefined,
+            repository: inputs.configRepository
+        }, octokit);
+        const rawMapping = jsYaml.load(fileContent, { schema: FAILSAFE_SCHEMA });
+        const mapping = validateMapping(rawMapping);
+        debug(JSON.stringify(mapping, null, 2));
+        const selectedRunner = selectRunner(mapping, inputs.repository, defaultRunner);
+        info(`Using runs-on value: ${selectedRunner}`);
+        setOutput('runs-on', `['${selectedRunner}']`);
     }
     catch (error) {
-        // Fail the workflow run if an error occurs
-        debug(JSON.stringify(error, null, 2));
-        const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-        setFailed(message);
+        setFailed(error.message);
     }
 }
 
