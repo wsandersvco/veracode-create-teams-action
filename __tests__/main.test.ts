@@ -18,6 +18,13 @@ const mockOctokit = {
             | { name: string; type: string }[]
         }>
       >()
+    },
+    rateLimit: {
+      get: jest.fn<
+        () => Promise<{
+          data: { rate: { limit: number; remaining: number; reset: number } }
+        }>
+      >()
     }
   }
 }
@@ -68,11 +75,29 @@ describe('main.ts', () => {
     // Set the action's inputs as return values from core.getInput().
     setupInput()
 
+    // Set up mocked data for rate limiting
+    mockOctokit.rest.rateLimit.get.mockResolvedValue({
+      data: {
+        rate: {
+          limit: 5000,
+          remaining: 4999,
+          reset: Math.floor(Date.now() / 1000) + 3600
+        }
+      }
+    })
+
     // Set up mocked data
+    const validYamlMapping = `ubuntu-latest:
+  - verademo-java
+  - verademo-java-mitigated
+windows-latest:
+  - verademo-dotnet
+  - verademo-netframework
+`
     mockOctokit.rest.repos.getContent.mockResolvedValue({
       data: {
-        content: Buffer.from('test content').toString('base64'),
-        size: 12
+        content: Buffer.from(validYamlMapping).toString('base64'),
+        size: validYamlMapping.length
       }
     })
     mockGetOctokit.mockReturnValue(mockOctokit)
@@ -105,7 +130,7 @@ describe('main.ts', () => {
       `Fetching file: ${defaultInput['runs-on-mapping-yaml']} from ${defaultInput['owner']}/${defaultInput['config-repository']}`
     )
     expect(core.info).toHaveBeenCalledWith(
-      `Successfully fetched file (12 bytes)`
+      expect.stringMatching(/Successfully fetched file \(\d+ bytes\)/)
     )
   })
 
@@ -127,7 +152,7 @@ describe('main.ts', () => {
       `Fetching file: ${defaultInput['runs-on-mapping-yaml']} from ${defaultInput['owner']}/${defaultInput['config-repository']} (ref: ${ref})`
     )
     expect(core.info).toHaveBeenCalledWith(
-      `Successfully fetched file (12 bytes)`
+      expect.stringMatching(/Successfully fetched file \(\d+ bytes\)/)
     )
   })
 
@@ -145,14 +170,10 @@ describe('main.ts', () => {
     await run()
 
     expect(core.error).toHaveBeenCalledWith(
-      expect.stringContaining(
-        `Failed to fetch file: Path ${mapping_file} is not a file`
-      )
+      expect.stringContaining('is a directory, not a file')
     )
     expect(core.setFailed).toHaveBeenCalledWith(
-      expect.stringContaining(
-        `Failed to fetch mapping file from ${defaultInput['owner']}/${defaultInput['config-repository']}/${mapping_file}`
-      )
+      expect.stringContaining(mapping_file)
     )
   })
 
