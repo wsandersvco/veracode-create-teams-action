@@ -1,7 +1,7 @@
 {
   "name": "select-runs-on-action",
   "description": "select-runs-on-action",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "author": "",
   "type": "module",
   "private": true,
@@ -20,7 +20,7 @@
     ".": "./dist/index.js"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "bundle": "npm run format:write && npm run package",
