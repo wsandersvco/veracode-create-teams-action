@@ -57,11 +57,12 @@ jobs:
         id: test-action
         uses: ./
         with:
+          build-runs-on: "[ 'ubuntu-latest' ]"
+          config-repository: select-runs-on-action
+          default-runs-on: "[ 'ubuntu-latest' ]"
           github-token: ${{ github.token }}
           owner: wsandersvc
-          config-repository: select-runs-on-action
           repository: verademo-java
-          default-runs-on: "[ 'ubuntu-latest' ]"
           runs-on-mapping-yaml: runs-on-mapping.yaml
 
       - name: Print Output
