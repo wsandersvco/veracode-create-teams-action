@@ -29,7 +29,7 @@ inputs:
     required: true
   ref:
     description:
-      Branch, tag, or commit SHA to fetch from (optional, defaults to default
+      Branch, tag, or commit SHA to fetch from in the config-repository (optional, defaults to default
       branch)
     required: false
   repository:
