@@ -92,7 +92,7 @@ with:
 
 ### Debugging Tips
 
-**Enable Debug Logging**
+1. **Enable Debug Logging**
 
 ```yaml
 # In your repository settings
@@ -101,13 +101,13 @@ Name: ACTIONS_STEP_DEBUG
 Value: true
 ```
 
-**Check Action Logs**
+1. **Check Action Logs**
 
 - Look for info messages about which repository was found/not found
 - Check for warnings about skipped YAML entries
 - Review error messages for specific failure reasons
 
-**Validate YAML File Locally**
+1. **Validate YAML File Locally**
 
 ```bash
 # Check YAML syntax
@@ -117,7 +117,7 @@ yamllint runs-on-mapping.yaml
 python -c "import yaml; yaml.safe_load(open('runs-on-mapping.yaml'))"
 ```
 
-**Test with Simple Configuration**
+1. **Test with Simple Configuration**
 
 ```yaml
 # Minimal test configuration
