@@ -302,17 +302,17 @@ fallback:
 
 ## 📥 Inputs
 
-| Input                        | Description                                | Required | Default             |
-| ---------------------------- | ------------------------------------------ | -------- | ------------------- |
-| `github-token`               | GitHub token with repo access              | ✅ Yes   | -                   |
-| `veracode-api-id`            | Veracode API ID for authentication         | ✅ Yes   | -                   |
-| `veracode-api-key`           | Veracode API Key for authentication        | ✅ Yes   | -                   |
-| `repository`                 | GitHub repository name                     | ✅ Yes   | -                   |
-| `owner`                      | GitHub repository owner                    | ✅ Yes   | -                   |
-| `config-repository`          | Repository containing team mapping config  | ❌ No    | `veracode`          |
-| `config-ref`                 | Branch, tag, or commit SHA for config repo | ❌ No    | Default branch      |
-| `veracode-team-mapping-yaml` | Path to team mapping YAML file             | ❌ No    | `team-mapping.yaml` |
-| `veracode-region`            | Veracode region (US, EU, or FEDERAL)       | ❌ No    | `US`                |
+| Input                        | Description                                      | Required | Default             |
+| ---------------------------- | ------------------------------------------------ | -------- | ------------------- |
+| `github-token`               | GitHub token with repository access              | ✅ Yes   | -                   |
+| `veracode-api-id`            | Veracode API ID for authentication               | ✅ Yes   | -                   |
+| `veracode-api-key`           | Veracode API Key for authentication              | ✅ Yes   | -                   |
+| `repository`                 | GitHub repository name                           | ✅ Yes   | -                   |
+| `owner`                      | GitHub repository owner                          | ✅ Yes   | -                   |
+| `config-repository`          | Repository containing team mapping config        | ❌ No    | `veracode`          |
+| `config-ref`                 | Branch, tag, or commit SHA for config repository | ❌ No    | Default branch      |
+| `veracode-team-mapping-yaml` | Path to team mapping YAML file                   | ❌ No    | `team-mapping.yaml` |
+| `veracode-region`            | Veracode region (US, EU, or FEDERAL)             | ❌ No    | `US`                |
 
 ### Input Details
 
