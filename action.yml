@@ -1,45 +1,80 @@
-name: select-runs-on-action
+name: 'Veracode Create Teams'
 description:
-  takes inputs for repository and mapping file to dynamically select the runs-on
-  runner
-author: William Sanders
+  'Automatically create and manage Veracode teams based on repository
+  configuration'
+author: 'William Sanders'
 
 # Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
-  icon: heart
-  color: red
+  icon: 'users'
+  color: 'blue'
 
 # Define your inputs here.
 inputs:
-  config-ref:
-    description:
-      Branch, tag, or commit SHA to fetch from in the config-repository
-      (optional, defaults to default branch)
-    required: false
+  github-token:
+    description: 'GitHub token with repo access'
+    required: true
+
+  veracode-api-id:
+    description: 'Veracode API ID for authentication'
+    required: true
+
+  veracode-api-key:
+    description: 'Veracode API Key for authentication'
+    required: true
+
+  repository:
+    description: 'GitHub repository name'
+    required: true
+
+  owner:
+    description: 'GitHub repository owner'
+    required: true
+
   config-repository:
-    description: GitHub repository name
+    description: 'Repository containing team mapping configuration'
     required: false
     default: veracode
-  github-token:
-    description: 'GitHub token with repo access to read the configuration file'
-    required: true
-  owner:
-    description: GitHub repository owner
-    required: true
-  repository:
-    description: GitHub repository name
-    required: true
+
+  config-ref:
+    description: 'Branch, tag, or commit SHA for config repository'
+    required: false
+
   veracode-team-mapping-yaml:
-    description: YAML mapping file for runs-on configuration
-    required: true
+    description: 'Path to team mapping YAML file'
+    required: false
     default: 'team-mapping.yaml'
+
+  veracode-region:
+    description: 'Veracode region (US, EU, or FEDERAL)'
+    required: false
+    default: 'US'
 
 # Define your outputs here.
 outputs:
-  build-runs-on:
-    description: Build runs_on runner selection from YAML mapping file
-  default-runs-on:
-    description: Default runs_on runner selection from YAML mapping file
+  team-id:
+    description: 'UUID of the created/updated team'
+
+  team-name:
+    description: 'Name of the created/updated team'
+
+  team-legacy-id:
+    description: 'Legacy ID of the team in Veracode database'
+
+  action-taken:
+    description: 'Action performed: created or updated'
+
+  member-count:
+    description: 'Number of members in the team'
+
+  members-added:
+    description: 'Number of members successfully added/validated'
+
+  members-skipped:
+    description: 'Number of members skipped (not found in Veracode)'
+
+  skipped-users:
+    description: 'Comma-separated list of users that were skipped'
 
 runs:
   using: node24

@@ -1,17 +1,17 @@
 {
-  "name": "select-runs-on-action",
-  "description": "select-runs-on-action",
-  "version": "3.0.5",
-  "author": "",
+  "name": "veracode-create-teams-action",
+  "description": "Automatically create and manage Veracode teams based on repository configurations",
+  "version": "1.0.0",
+  "author": "William Sanders",
   "type": "module",
   "private": true,
-  "homepage": "https://github.com/wsandersvc/select-runs-on-action",
+  "homepage": "https://github.com/wsandersvc/veracode-create-teams-action",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wsandersvc/select-runs-on-action.git"
+    "url": "git+https://github.com/wsandersvc/veracode-create-teams-action.git"
   },
   "bugs": {
-    "url": "https://github.com/wsandersvc/select-runs-on-action/issues"
+    "url": "https://github.com/wsandersvc/veracode-create-teams-action/issues"
   },
   "keywords": [
     "actions"
@@ -39,7 +39,9 @@
   "dependencies": {
     "@actions/core": "^3.0.0",
     "@actions/github": "^9.0.0",
-    "js-yaml": "^4.1.1"
+    "axios": "^1.13.6",
+    "js-yaml": "^4.1.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/compat": "^2.0.2",
@@ -48,6 +50,7 @@
     "@github/local-action": "^7.0.1",
     "@jest/globals": "^30.2.0",
     "@rollup/plugin-commonjs": "^29.0.0",
+    "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-typescript": "^12.3.0",
     "@types/jest": "^30.0.0",
@@ -62,6 +65,7 @@
     "make-coverage-badge": "^1.2.0",
     "prettier": "^3.8.1",
     "rollup": "^4.57.1",
+    "sjcl": "^1.0.9",
     "ts-jest": "^29.4.6",
     "ts-jest-resolver": "^2.0.1",
     "typescript": "^5.9.3"

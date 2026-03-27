@@ -1,30 +1,24 @@
+/**
+ * Main entry point for the Veracode Create Teams Action
+ */
+
 import * as core from '@actions/core'
 import { getOctokit } from '@actions/github'
-import yaml, { FAILSAFE_SCHEMA } from 'js-yaml'
+import yaml, { CORE_SCHEMA } from 'js-yaml'
+import type { ActionInputs, ActionOutputs, TeamConfiguration } from './types.js'
+import { VeracodeClient } from './veracode/client.js'
+import { UserValidator } from './services/user-validator.js'
+import { TeamService } from './services/team-service.js'
+import { GitHubService } from './services/github-service.js'
+import { ConfigurationResolver } from './config/resolver.js'
+import { validateMapping } from './config/validator.js'
+import { executeWithRetry } from './utils/retry.js'
+import { VeracodeActionError, ErrorCategory } from './errors.js'
 
 type Octokit = ReturnType<typeof getOctokit>
 
 /**
  * Fetches a file from a GitHub repository using the GitHub API.
- *
- * This function retrieves file content from a specified repository and path,
- * validates that the path points to a file (not a directory), checks rate limits,
- * and decodes the base64-encoded content returned by the GitHub API.
- *
- * @param options - Configuration object containing repository details
- * @param options.owner - GitHub repository owner (username or organization)
- * @param options.repository - GitHub repository name where the file is located
- * @param options.path - Path to the file within the repository
- * @param options.ref - Optional git reference (branch, tag, or commit SHA). If not provided, uses default branch
- * @param octokit - Authenticated Octokit instance for making GitHub API calls
- * @returns Promise that resolves to the decoded file content as a UTF-8 string
- * @throws {Error} If the file cannot be fetched, the path is a directory, or API call fails
- *
- * @example
- * const content = await fetchFileFromRepo(
- *   { owner: 'myorg', repository: 'config', path: 'runners.yaml', ref: 'main' },
- *   octokit
- * )
  */
 async function fetchFileFromRepo(
   options: {
@@ -38,13 +32,6 @@ async function fetchFileFromRepo(
   const { owner, path, ref, repository } = options
 
   try {
-    // Check rate limit
-    const rateLimit = await octokit.rest.rateLimit.get()
-    core.debug(
-      `Rate limit remaining: ${rateLimit.data.rate.remaining}/${rateLimit.data.rate.limit}`
-    )
-    core.debug(`Rate limit reset: ${rateLimit.data.rate.reset}`)
-
     core.info(
       `Fetching file: ${path} from ${owner}/${repository}${ref ? ` (ref: ${ref})` : ''}`
     )
@@ -56,12 +43,9 @@ async function fetchFileFromRepo(
       ...(ref && { ref })
     })
 
-    core.debug(JSON.stringify(response, null, 2))
-
-    // Validate API response is valid and for GitHub file, not directory
     if (!('content' in response.data) || Array.isArray(response.data)) {
       throw new Error(
-        `Path ${owner}/${repository}/${path}${ref ? ` (ref: ${ref})` : ''} is a directory, not a file`
+        `Path ${owner}/${repository}/${path} is a directory, not a file`
       )
     }
 
@@ -72,54 +56,236 @@ async function fetchFileFromRepo(
     core.info(`Successfully fetched file (${response.data.size} bytes)`)
     return content
   } catch (error) {
-    const err = error as Error
-    core.error(`Failed to fetch file: ${err.message}`)
-    throw new Error(
-      `Failed to fetch file from ${owner}/${repository}/${path}: ${err.message}`,
-      { cause: error }
+    throw new VeracodeActionError(
+      `Failed to fetch file from ${owner}/${repository}/${path}`,
+      ErrorCategory.CONFIGURATION,
+      false,
+      undefined,
+      error as Error
     )
   }
 }
 
 /**
+ * Validates and retrieves action inputs
+ */
+function getInputs(): ActionInputs {
+  return {
+    githubToken: core.getInput('github-token', { required: true }),
+    veracodeApiId: core.getInput('veracode-api-id', { required: true }),
+    veracodeApiKey: core.getInput('veracode-api-key', { required: true }),
+    repository: core.getInput('repository', { required: true }),
+    owner: core.getInput('owner', { required: true }),
+    configRepository:
+      core.getInput('config-repository', { required: false }) || '.veracode',
+    configRef: core.getInput('config-ref', { required: false }) || undefined,
+    mappingPath:
+      core.getInput('veracode-team-mapping-yaml', { required: false }) ||
+      'team-mapping.yaml',
+    veracodeRegion:
+      (core.getInput('veracode-region', { required: false }) as
+        | 'US'
+        | 'EU'
+        | 'FEDERAL') || 'US'
+  }
+}
+
+/**
+ * Sets action outputs
+ */
+function setOutputs(outputs: ActionOutputs): void {
+  core.setOutput('team-id', outputs.teamId)
+  core.setOutput('team-name', outputs.teamName)
+  core.setOutput('team-legacy-id', outputs.teamLegacyId)
+  core.setOutput('action-taken', outputs.actionTaken)
+  core.setOutput('member-count', outputs.memberCount)
+  core.setOutput('members-added', outputs.membersAdded)
+  core.setOutput('members-skipped', outputs.membersSkipped)
+  core.setOutput('skipped-users', outputs.skippedUsers.join(','))
+}
+
+/**
  * The main function for the action.
- *
- * @returns Resolves when the action is complete.
  */
 export async function run(): Promise<void> {
   try {
-    const inputs = {
-      configRef: core.getInput('config-ref', { required: false }),
-      configRepository: core.getInput('config-repository', {
-        required: false
-      }),
-      githubToken: core.getInput('github-token', { required: true }),
-      owner: core.getInput('owner', { required: true }),
-      repository: core.getInput('repository', { required: true }),
-      mappingPath: core.getInput('veracode-team-mapping-yaml', {
-        required: true
-      })
-    }
-
-    const octokit = getOctokit(inputs.githubToken)
-
+    // 1. Get and validate inputs
+    core.startGroup('📋 Validating inputs')
+    const inputs = getInputs()
+    core.info(`Repository: ${inputs.owner}/${inputs.repository}`)
     core.info(
-      `Loading veracode-team-mapping-yaml from ${inputs.owner}/${inputs.configRepository}/${inputs.mappingPath}${inputs.configRef ? ` (ref: ${inputs.configRef})` : ''}`
+      `Config: ${inputs.owner}/${inputs.configRepository}/${inputs.mappingPath}`
     )
+    core.info(`Region: ${inputs.veracodeRegion}`)
+    core.endGroup()
+
+    // 2. Initialize clients
+    core.startGroup('🔧 Initializing clients')
+    const octokit = getOctokit(inputs.githubToken)
+    const veracodeClient = new VeracodeClient(
+      inputs.veracodeApiId,
+      inputs.veracodeApiKey,
+      inputs.veracodeRegion
+    )
+    const userValidator = new UserValidator(veracodeClient)
+    const teamService = new TeamService(veracodeClient)
+    const githubService = new GitHubService(octokit)
+    core.info('✓ Clients initialized successfully')
+    core.endGroup()
+
+    // 3. Load and parse mapping configuration
+    core.startGroup('📄 Loading team mapping configuration')
     const fileContent = await fetchFileFromRepo(
       {
         owner: inputs.owner,
         path: inputs.mappingPath,
-        ref: inputs.configRef || undefined,
+        ref: inputs.configRef,
         repository: inputs.configRepository
       },
       octokit
     )
+    const rawMapping = yaml.load(fileContent, { schema: CORE_SCHEMA })
+    const mapping = validateMapping(rawMapping)
+    core.info('✓ Configuration loaded and validated')
+    core.endGroup()
 
-    const rawMapping = yaml.load(fileContent, { schema: FAILSAFE_SCHEMA })
-    // const mapping = validateMapping(rawMapping)
-    // core.debug(JSON.stringify(mapping, null, 2))
+    // 4. Resolve team configuration for this repository
+    core.startGroup('🎯 Resolving team configuration')
+    const resolver = new ConfigurationResolver(mapping)
+    let teamConfig: TeamConfiguration = resolver.resolveTeamConfiguration(
+      inputs.repository
+    )
+    core.info(`Team name: ${teamConfig.team_name}`)
+    core.info(`Base members: ${teamConfig.members.length}`)
+    core.endGroup()
+
+    // 5. Fetch GitHub collaborators if configured
+    if (teamConfig.sync_github_collaborators) {
+      core.startGroup('👥 Fetching GitHub collaborators')
+      const githubMembers = await githubService.fetchCollaborators(
+        inputs.owner,
+        inputs.repository,
+        teamConfig.github_collaborator_filter
+      )
+      core.info(`Found ${githubMembers.length} GitHub collaborators`)
+
+      // Merge with configured members
+      const mergedMembers = GitHubService.mergeMembers(
+        teamConfig.members,
+        githubMembers
+      )
+      teamConfig = { ...teamConfig, members: mergedMembers }
+      core.info(`Total members after merge: ${teamConfig.members.length}`)
+      core.endGroup()
+    }
+
+    // 6. Validate all users against Veracode platform (CRITICAL)
+    core.startGroup('✅ Validating users against Veracode platform')
+    const validationResult = await userValidator.validateTeamMembers(
+      teamConfig.members
+    )
+
+    if (validationResult.invalidMembers.length > 0) {
+      core.warning(
+        `${validationResult.invalidMembers.length} users will be skipped ` +
+          `(not found or inactive in Veracode)`
+      )
+    }
+
+    // Update config with only validated members
+    teamConfig = {
+      ...teamConfig,
+      members: validationResult.validMembers
+    }
+    core.endGroup()
+
+    // 7. Check if team exists
+    core.startGroup('🔍 Checking if team exists')
+    const existingTeam = await executeWithRetry(
+      () => teamService.findTeamByName(teamConfig.team_name),
+      'Find team by name'
+    )
+    core.endGroup()
+
+    // 8. Create or update team
+    let team
+    let actionTaken: 'created' | 'updated'
+
+    if (!existingTeam) {
+      core.startGroup('➕ Creating new team')
+      team = await executeWithRetry(
+        () => teamService.createTeam(teamConfig),
+        'Create team'
+      )
+      actionTaken = 'created'
+      core.info(`✓ Team created: ${team.team_name} (${team.team_id})`)
+      core.endGroup()
+    } else {
+      core.startGroup('🔄 Updating existing team')
+      team = await executeWithRetry(
+        () => teamService.updateTeam(existingTeam.team_id, teamConfig),
+        'Update team'
+      )
+      actionTaken = 'updated'
+      core.info(`✓ Team updated: ${team.team_name} (${team.team_id})`)
+      core.endGroup()
+    }
+
+    // 9. Set outputs
+    core.startGroup('📤 Setting outputs')
+    const outputs: ActionOutputs = {
+      teamId: team.team_id,
+      teamName: team.team_name,
+      teamLegacyId: team.team_legacy_id,
+      actionTaken,
+      memberCount: team.user_count || validationResult.validMembers.length,
+      membersAdded: validationResult.validMembers.length,
+      membersSkipped: validationResult.invalidMembers.length,
+      skippedUsers: validationResult.invalidMembers.map((m) => m.user)
+    }
+    setOutputs(outputs)
+
+    core.info('✓ Outputs set successfully')
+    core.info(`  Team ID: ${outputs.teamId}`)
+    core.info(`  Team Name: ${outputs.teamName}`)
+    core.info(`  Action: ${outputs.actionTaken}`)
+    core.info(`  Members Added: ${outputs.membersAdded}`)
+    core.info(`  Members Skipped: ${outputs.membersSkipped}`)
+    core.endGroup()
+
+    // 10. Summary
+    core.summary.addHeading('✅ Veracode Team Sync Complete').addTable([
+      [
+        { data: 'Property', header: true },
+        { data: 'Value', header: true }
+      ],
+      ['Team Name', outputs.teamName],
+      ['Team ID', outputs.teamId],
+      ['Action', outputs.actionTaken],
+      ['Members Added', outputs.membersAdded.toString()],
+      ['Members Skipped', outputs.membersSkipped.toString()]
+    ])
+
+    if (outputs.skippedUsers.length > 0) {
+      core.summary
+        .addHeading('⚠️ Skipped Users', 3)
+        .addList(outputs.skippedUsers)
+    }
+
+    await core.summary.write()
   } catch (error) {
-    core.setFailed((error as Error).message)
+    const err = error as Error
+    core.setFailed(err.message)
+
+    // Add error details to job summary
+    core.summary
+      .addHeading('❌ Action Failed')
+      .addCodeBlock(err.message, 'text')
+
+    if (err.stack) {
+      core.summary.addDetails('Stack Trace', err.stack)
+    }
+
+    await core.summary.write()
   }
 }

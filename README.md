@@ -1,140 +1,707 @@
-# select-runs-on-action
+# Veracode Create Teams Action
 
-![Linter](https://github.com/wsandersvc/select-runs-on-action/actions/workflows/linter.yml/badge.svg)
-![CI](https://github.com/wsandersvc/select-runs-on-action/actions/workflows/ci.yml/badge.svg)
-![Check dist/](https://github.com/wsandersvc/select-runs-on-action/actions/workflows/check-dist.yml/badge.svg)
-![CodeQL](https://github.com/wsandersvc/select-runs-on-action/actions/workflows/codeql-analysis.yml/badge.svg)
+![Linter](https://github.com/wsandersvc/veracode-create-teams-action/actions/workflows/linter.yml/badge.svg)
+![CI](https://github.com/wsandersvc/veracode-create-teams-action/actions/workflows/ci.yml/badge.svg)
+![Check dist/](https://github.com/wsandersvc/veracode-create-teams-action/actions/workflows/check-dist.yml/badge.svg)
+![CodeQL](https://github.com/wsandersvc/veracode-create-teams-action/actions/workflows/codeql-analysis.yml/badge.svg)
 ![Coverage](./badges/coverage.svg)
 
-## Roadmap
+A GitHub Action that automatically creates and manages Veracode teams based on
+repository configurations. This action integrates with the Veracode Identity API
+to ensure teams exist and are properly configured with validated members.
 
-- Changes required to integrate with Veracode Workflow App.
+## ✨ Features
 
-## Initial Setup
+- ✅ **Automatic Team Management** - Create and update Veracode teams seamlessly
+- ✅ **User Validation** - Validates all users against Veracode platform before
+  adding to teams
+- ✅ **GitHub Collaborator Sync** - Optionally synchronize repository
+  collaborators
+- ✅ **Wildcard Pattern Matching** - Support for pattern-based repository
+  mapping
+- ✅ **Incremental Updates** - Non-destructive updates that preserve existing
+  members
+- ✅ **Multi-Region Support** - Works with US, EU, and Federal Veracode
+  instances
+- ✅ **Comprehensive Error Handling** - Retry logic with exponential backoff
+- ✅ **Flexible Configuration** - Centralized YAML-based team mapping
 
-1. Create the file `runs-on-mapping.yaml` in your `veracode` or configuration
-   repository.
-   - Ensure the format is correct.
+## 📋 Table of Contents
 
-## Modify Veracode Workflow App
+- [Quick Start](#quick-start)
+- [Usage Examples](#usage-examples)
+- [Configuration](#configuration)
+- [Inputs](#inputs)
+- [Outputs](#outputs)
+- [Team Mapping Schema](#team-mapping-schema)
+- [Examples](#examples)
+- [Troubleshooting](#troubleshooting)
+- [Requirements](#requirements)
+- [Contributing](#contributing)
 
-Please see [action.yml](./action.yml) for supported inputs and outputs. You will
-need to update the relevant sections for `build_runs_on` and `default_runs_on`
-with the following: `${{ needs.runs_on_validations.outputs.override_runs_on }}`
-and set the `runs_on_validations` job as a `need` in jobs where the
-override_runs_on output is referenced.
+## 🚀 Quick Start
 
-```yaml
-runs_on_validations:
-  needs: validations
-  runs-on:
-    ${{ fromJson(github.event.client_payload.user_config.default_runs_on) }}
-  name: Runner Validations
-  outputs:
-    override_runs_on: ${{ steps.select-runs-on-action.outputs.runs-on }}
-  steps:
-    - name: Verify Runner Mappings
-      id: select-runs-on-action
-      uses: wsandersvc/select-runs-on-action@v1
-      with:
-        github-token: ${{ github.event.client_payload.token }}
-        owner: ${{ github.event.client_payload.repository.owner }}
-        repository: ${{ github.event.client_payload.repository.name }}
-        default-runs-on:
-          ${{ github.event.client_payload.user_config.default_runs_on }}
-        runs-on-mapping-yaml: runs-on-mapping.yaml
-```
+### Basic Setup
 
-### Running as a distributed script
-
-Note, that all parameters are required when executing this way.
+1. **Create a team mapping file** in your configuration repository (default:
+   `veracode` repository):
 
 ```yaml
-runs_on_validations:
-  needs: validations
-  runs-on:
-    ${{ fromJson(github.event.client_payload.user_config.default_runs_on) }}
-  name: Runner Validations
-  outputs:
-    override_runs_on: ${{ steps.select-runs-on-action.outputs.runs-on }}
-  steps:
-    - name: Setup Node
-      uses: actions/setup-node@v4
-      with:
-        node-version: 24.14.0
+# team-mapping.yaml
+version: '1.0'
 
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Verify Runner Mappings
-      id: select-runs-on-action
-      env:
-        INPUT_GITHUB-TOKEN: ${{ github.event.client_payload.token }}
-        INPUT_OWNER: ${{ github.event.client_payload.repository.owner }}
-        INPUT_REPOSITORY: ${{ github.event.client_payload.repository.name }}
-        INPUT_CONFIG-REPOSITORY: veracode
-        INPUT_DEFAULT-RUNS-ON:
-          ${{ github.event.client_payload.user_config.default_runs_on }}
-        INPUT_RUNS-ON-MAPPING-YAML: runs-on-mapping.yaml
-      run: |
-        node scripts/action-select-runs-on-action.js
+mappings:
+  my-application:
+    team_name: 'My Application Security Team'
+    description: 'Security team for my application'
+    business_unit: 'Engineering'
+    members:
+      - user: 'security-admin@example.com'
+        relationship: 'ADMIN'
+      - user: 'developer@example.com'
+        relationship: 'MEMBER'
 ```
 
-Optionally define the following if the mapping YAML file resides in a custom
-location.
+2. **Add the action to your workflow**:
 
 ```yaml
-with:
-  config-repository: my-custom-repository
+name: Sync Veracode Team
+on: [push]
+
+jobs:
+  sync-team:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create/Update Veracode Team
+        uses: your-org/veracode-create-teams-action@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          veracode-api-id: ${{ secrets.VERACODE_API_ID }}
+          veracode-api-key: ${{ secrets.VERACODE_API_KEY }}
+          repository: ${{ github.event.repository.name }}
+          owner: ${{ github.repository_owner }}
 ```
 
-## Troubleshooting
+## 📚 Usage Examples
 
-### Debugging Tips
-
-1. **Enable Debug Logging**
+### Example 1: Basic Team Creation
 
 ```yaml
-# In your repository settings
-Secrets → Actions → Add secret
-Name: ACTIONS_STEP_DEBUG
-Value: true
+- name: Create Veracode Team
+  uses: your-org/veracode-create-teams-action@v1
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    veracode-api-id: ${{ secrets.VERACODE_API_ID }}
+    veracode-api-key: ${{ secrets.VERACODE_API_KEY }}
+    repository: my-app
+    owner: my-org
 ```
 
-1. **Check Action Logs**
+### Example 2: Custom Configuration Repository
 
-- Look for info messages about which repository was found/not found
-- Check for warnings about skipped YAML entries
-- Review error messages for specific failure reasons
+```yaml
+- name: Create Veracode Team with Custom Config
+  uses: your-org/veracode-create-teams-action@v1
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    veracode-api-id: ${{ secrets.VERACODE_API_ID }}
+    veracode-api-key: ${{ secrets.VERACODE_API_KEY }}
+    repository: ${{ github.event.repository.name }}
+    owner: ${{ github.repository_owner }}
+    config-repository: .security-config
+    config-ref: main
+    veracode-team-mapping-yaml: teams/mapping.yaml
+```
 
-1. **Validate YAML File Locally**
+### Example 3: EU Region Instance
+
+```yaml
+- name: Create Veracode Team (EU)
+  uses: your-org/veracode-create-teams-action@v1
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    veracode-api-id: ${{ secrets.VERACODE_API_ID_EU }}
+    veracode-api-key: ${{ secrets.VERACODE_API_KEY_EU }}
+    repository: ${{ github.event.repository.name }}
+    owner: ${{ github.repository_owner }}
+    veracode-region: EU
+```
+
+### Example 4: With Result Handling
+
+```yaml
+- name: Create/Update Veracode Team
+  id: veracode-team
+  uses: your-org/veracode-create-teams-action@v1
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    veracode-api-id: ${{ secrets.VERACODE_API_ID }}
+    veracode-api-key: ${{ secrets.VERACODE_API_KEY }}
+    repository: ${{ github.event.repository.name }}
+    owner: ${{ github.repository_owner }}
+
+- name: Report Results
+  run: |
+    echo "Team: ${{ steps.veracode-team.outputs.team-name }}"
+    echo "Team ID: ${{ steps.veracode-team.outputs.team-id }}"
+    echo "Action: ${{ steps.veracode-team.outputs.action-taken }}"
+    echo "Members Added: ${{ steps.veracode-team.outputs.members-added }}"
+    echo "Members Skipped: ${{ steps.veracode-team.outputs.members-skipped }}"
+
+- name: Handle Skipped Users
+  if: steps.veracode-team.outputs.members-skipped > 0
+  run: |
+    echo "⚠️ Warning: Some users were not added to the team"
+    echo "Skipped users: ${{ steps.veracode-team.outputs.skipped-users }}"
+```
+
+### Example 5: Create Issue for Skipped Users
+
+```yaml
+- name: Create/Update Veracode Team
+  id: veracode-team
+  uses: your-org/veracode-create-teams-action@v1
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    veracode-api-id: ${{ secrets.VERACODE_API_ID }}
+    veracode-api-key: ${{ secrets.VERACODE_API_KEY }}
+    repository: ${{ github.event.repository.name }}
+    owner: ${{ github.repository_owner }}
+
+- name: Create Issue for Skipped Users
+  if: steps.veracode-team.outputs.members-skipped > 0
+  uses: actions/github-script@v7
+  with:
+    script: |
+      const skippedUsers = '${{ steps.veracode-team.outputs.skipped-users }}'.split(',')
+      const body = `
+      ## ⚠️ Veracode Team Sync - Users Not Found
+
+      The following users could not be added to the Veracode team:
+
+      ${skippedUsers.map(u => `- ${u}`).join('
+')}
+
+      ### Action Required
+
+      Please ensure these users are invited to the Veracode platform first.
+
+      **Team:** ${{ steps.veracode-team.outputs.team-name }}
+      **Members Added:** ${{ steps.veracode-team.outputs.members-added }}
+      **Members Skipped:** ${{ steps.veracode-team.outputs.members-skipped }}
+      `
+
+      await github.rest.issues.create({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        title: '⚠️ Veracode Team Sync: Users Not Found',
+        body: body,
+        labels: ['veracode', 'team-management']
+      })
+```
+
+## 🔧 Configuration
+
+### Team Mapping YAML Schema
+
+The team mapping configuration file (`team-mapping.yaml`) defines how
+repositories map to Veracode teams.
+
+#### Complete Example
+
+```yaml
+# team-mapping.yaml
+version: '1.0'
+
+# Global default settings (optional)
+defaults:
+  business_unit: 'Engineering'
+  member_only: false
+  auto_add_collaborators: true
+  incremental_updates: true
+
+# Repository-to-Team Mappings
+mappings:
+  # Exact repository name match
+  my-application:
+    team_name: 'My Application Security Team'
+    description: 'Security team for my application'
+    business_unit: 'Engineering'
+    member_only: false
+    members:
+      - user: 'security-admin@example.com'
+        relationship: 'ADMIN'
+      - user: 'developer@example.com'
+        relationship: 'MEMBER'
+    # Optional: Sync GitHub collaborators
+    sync_github_collaborators: true
+    github_collaborator_filter:
+      - 'admin'
+      - 'write'
+
+  another-repo:
+    team_name: 'Another Team'
+    description: 'Another security team'
+    members:
+      - user: 'team-lead@example.com'
+        relationship: 'ADMIN'
+
+  # Wildcard pattern matching
+  'api-*':
+    team_name: 'API Services Security Team'
+    description: 'Team for all API services'
+    members:
+      - user: 'api-security@example.com'
+        relationship: 'ADMIN'
+
+# Fallback configuration (optional)
+fallback:
+  auto_create: true
+  team_name_template: '{repository_name} Security Team'
+  default_members:
+    - user: 'default-admin@example.com'
+      relationship: 'ADMIN'
+```
+
+#### Schema Fields
+
+**Root Level:**
+
+- `version` (required): Schema version (currently "1.0")
+- `defaults` (optional): Default settings applied to all teams
+- `mappings` (required): Repository-to-team mapping configurations
+- `fallback` (optional): Fallback behavior when no mapping matches
+
+**Default Settings:**
+
+- `business_unit` (optional): Default business unit for all teams
+- `member_only` (optional): Default member-only flag
+- `auto_add_collaborators` (optional): Auto-add GitHub collaborators by default
+- `incremental_updates` (optional): Use incremental updates by default
+
+**Team Configuration:**
+
+- `team_name` (required): Name of the Veracode team
+- `description` (optional): Team description
+- `business_unit` (optional): Business unit name
+- `member_only` (optional): Member-only flag
+- `members` (required): Array of team members
+  - `user` (required): Email address or username
+  - `relationship` (required): Either "ADMIN" or "MEMBER"
+- `sync_github_collaborators` (optional): Sync GitHub collaborators
+- `github_collaborator_filter` (optional): Filter collaborators by permission
+  level
+  - Valid values: "admin", "write", "read"
+
+**Fallback Configuration:**
+
+- `auto_create` (required): Whether to auto-create teams
+- `team_name_template` (optional): Template for team names (supports
+  `{repository_name}`)
+- `default_members` (optional): Default members for auto-created teams
+
+## 📥 Inputs
+
+| Input                        | Description                                | Required | Default             |
+| ---------------------------- | ------------------------------------------ | -------- | ------------------- |
+| `github-token`               | GitHub token with repo access              | ✅ Yes   | -                   |
+| `veracode-api-id`            | Veracode API ID for authentication         | ✅ Yes   | -                   |
+| `veracode-api-key`           | Veracode API Key for authentication        | ✅ Yes   | -                   |
+| `repository`                 | GitHub repository name                     | ✅ Yes   | -                   |
+| `owner`                      | GitHub repository owner                    | ✅ Yes   | -                   |
+| `config-repository`          | Repository containing team mapping config  | ❌ No    | `veracode`          |
+| `config-ref`                 | Branch, tag, or commit SHA for config repo | ❌ No    | Default branch      |
+| `veracode-team-mapping-yaml` | Path to team mapping YAML file             | ❌ No    | `team-mapping.yaml` |
+| `veracode-region`            | Veracode region (US, EU, or FEDERAL)       | ❌ No    | `US`                |
+
+### Input Details
+
+#### `github-token`
+
+GitHub token used to authenticate with the GitHub API. Requires read access to
+repositories.
+
+**Example:**
+
+```yaml
+github-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+#### `veracode-api-id` and `veracode-api-key`
+
+Veracode API credentials for HMAC-SHA256 authentication. Store these as GitHub
+Secrets.
+
+**Permissions Required:**
+
+- `Team Admin` role or equivalent
+- `teams:read` and `teams:write` permissions
+
+**Example:**
+
+```yaml
+veracode-api-id: ${{ secrets.VERACODE_API_ID }}
+veracode-api-key: ${{ secrets.VERACODE_API_KEY }}
+```
+
+#### `repository` and `owner`
+
+The repository name and owner to process. Used to look up the team
+configuration.
+
+**Example:**
+
+```yaml
+repository: ${{ github.event.repository.name }}
+owner: ${{ github.repository_owner }}
+```
+
+#### `config-repository`
+
+The repository containing the `team-mapping.yaml` configuration file.
+
+**Example:**
+
+```yaml
+config-repository: .security-config
+```
+
+#### `veracode-region`
+
+The Veracode instance region. Valid values: `US`, `EU`, `FEDERAL`
+
+**Example:**
+
+```yaml
+veracode-region: EU
+```
+
+## 📤 Outputs
+
+| Output            | Description                                       | Example                                |
+| ----------------- | ------------------------------------------------- | -------------------------------------- |
+| `team-id`         | UUID of the created/updated team                  | `550e8400-e29b-41d4-a716-446655440000` |
+| `team-name`       | Name of the created/updated team                  | `My Application Security Team`         |
+| `team-legacy-id`  | Legacy ID of the team                             | `12345`                                |
+| `action-taken`    | Action performed                                  | `created` or `updated`                 |
+| `member-count`    | Total number of members in the team               | `5`                                    |
+| `members-added`   | Number of members successfully added/validated    | `3`                                    |
+| `members-skipped` | Number of members skipped (not found in Veracode) | `2`                                    |
+| `skipped-users`   | Comma-separated list of users that were skipped   | `user1@example.com,user2@example.com`  |
+
+### Using Outputs
+
+```yaml
+- name: Create Veracode Team
+  id: team
+  uses: your-org/veracode-create-teams-action@v1
+  with:
+    # ... inputs ...
+
+- name: Use Outputs
+  run: |
+    echo "Team ID: ${{ steps.team.outputs.team-id }}"
+    echo "Team Name: ${{ steps.team.outputs.team-name }}"
+```
+
+## 🎯 Examples
+
+### Example 1: Simple Team Mapping
+
+```yaml
+# team-mapping.yaml
+version: '1.0'
+
+mappings:
+  web-application:
+    team_name: 'Web App Security Team'
+    members:
+      - user: 'security@example.com'
+        relationship: 'ADMIN'
+```
+
+### Example 2: Multiple Teams with Defaults
+
+```yaml
+# team-mapping.yaml
+version: '1.0'
+
+defaults:
+  business_unit: 'Engineering'
+  member_only: false
+
+mappings:
+  frontend-app:
+    team_name: 'Frontend Security Team'
+    members:
+      - user: 'frontend-lead@example.com'
+        relationship: 'ADMIN'
+      - user: 'frontend-dev@example.com'
+        relationship: 'MEMBER'
+
+  backend-app:
+    team_name: 'Backend Security Team'
+    members:
+      - user: 'backend-lead@example.com'
+        relationship: 'ADMIN'
+      - user: 'backend-dev@example.com'
+        relationship: 'MEMBER'
+```
+
+### Example 3: GitHub Collaborator Sync
+
+```yaml
+# team-mapping.yaml
+version: '1.0'
+
+mappings:
+  my-repo:
+    team_name: 'My Repo Security Team'
+    sync_github_collaborators: true
+    github_collaborator_filter:
+      - 'admin'
+      - 'write'
+    members:
+      # Additional members not in GitHub
+      - user: 'external-security@example.com'
+        relationship: 'ADMIN'
+```
+
+### Example 4: Wildcard Patterns
+
+```yaml
+# team-mapping.yaml
+version: '1.0'
+
+mappings:
+  # All API services
+  'api-*':
+    team_name: 'API Services Team'
+    members:
+      - user: 'api-team@example.com'
+        relationship: 'ADMIN'
+
+  # All microservices
+  '*-service':
+    team_name: 'Microservices Team'
+    members:
+      - user: 'microservices-team@example.com'
+        relationship: 'ADMIN'
+```
+
+### Example 5: Fallback Configuration
+
+```yaml
+# team-mapping.yaml
+version: '1.0'
+
+mappings:
+  important-app:
+    team_name: 'Important App Team'
+    members:
+      - user: 'team-lead@example.com'
+        relationship: 'ADMIN'
+
+# Auto-create teams for unmapped repositories
+fallback:
+  auto_create: true
+  team_name_template: '{repository_name} Security Team'
+  default_members:
+    - user: 'default-security@example.com'
+      relationship: 'ADMIN'
+```
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+#### Issue 1: Users Not Found in Veracode
+
+**Problem:** Action reports that users were skipped because they don't exist in
+Veracode.
+
+**Solution:**
+
+1. Ensure users are invited to the Veracode platform first
+2. Check that email addresses match exactly
+3. Verify users have activated their accounts
+
+**Example Output:**
+
+```
+⚠️ 2 users do not exist in Veracode and will be skipped
+  - newuser@example.com: User does not exist in Veracode platform
+  - inactive@example.com: User account is inactive
+```
+
+#### Issue 2: Configuration File Not Found
+
+**Problem:** Action fails with "Failed to fetch file" error.
+
+**Solution:**
+
+1. Verify the `config-repository` exists and is accessible
+2. Check the `veracode-team-mapping-yaml` path is correct
+3. Ensure the GitHub token has read access to the config repository
+
+#### Issue 3: Authentication Failures
+
+**Problem:** Action fails with 401 or 403 errors.
+
+**Solution:**
+
+1. Verify Veracode API credentials are correct
+2. Check that credentials have not expired
+3. Ensure the API user has Team Admin permissions
+4. Verify the correct region is specified
+
+#### Issue 4: No Team Configuration Found
+
+**Problem:** Action fails with "No team configuration found for repository".
+
+**Solution:**
+
+1. Add an entry for the repository in the mapping file
+2. Use wildcard patterns to match multiple repositories
+3. Configure a fallback auto-create setting
+
+### Debug Mode
+
+Enable debug logging to get detailed information:
+
+```yaml
+# In repository settings: Settings → Secrets → Actions
+# Add secret: ACTIONS_STEP_DEBUG = true
+```
+
+### Validation Tips
+
+1. **Validate YAML Syntax:**
 
 ```bash
-# Check YAML syntax
-yamllint runs-on-mapping.yaml
-
-# Or use Python
-python -c "import yaml; yaml.safe_load(open('runs-on-mapping.yaml'))"
+yamllint team-mapping.yaml
 ```
 
-1. **Test with Simple Configuration**
+2. **Test with Minimal Configuration:**
 
 ```yaml
-# Minimal test configuration
-ubuntu-latest:
-  - test-repo
+version: '1.0'
+mappings:
+  test-repo:
+    team_name: 'Test Team'
+    members:
+      - user: 'test@example.com'
+        relationship: 'ADMIN'
 ```
 
-### Getting Help
+3. **Check Action Logs:**
 
-If you encounter issues not covered here:
+- Review info messages about team creation/updates
+- Look for warnings about skipped users
+- Check for error details in failed runs
 
-Check the
-[GitHub Issues](https://github.com/wsandersvc/select-runs-on-action/issues) for
-similar problems Review the action logs for specific error messages Open a new
-issue with:
+## 📋 Requirements
 
-- Full error message
-- Relevant action configuration (sanitized, no secrets)
-- Steps to reproduce
-- Expected vs actual behavior
+### Software Requirements
+
+- **Node.js:** 24.x or higher
+- **GitHub Actions:** Runner with ubuntu-latest or equivalent
+
+### Veracode Requirements
+
+- **Veracode API Credentials:**
+  - API ID and API Key
+  - Team Admin role or equivalent permissions
+  - `teams:read` and `teams:write` permissions
+
+### GitHub Requirements
+
+- **GitHub Token:**
+  - `repo` scope (read access to repositories)
+  - `read:org` scope (optional, for organization members)
+
+### Security Considerations
+
+1. **Store credentials as GitHub Secrets:**
+   - Never commit API credentials to the repository
+   - Use GitHub's encrypted secrets feature
+
+2. **Principle of Least Privilege:**
+   - Use API credentials with minimal required permissions
+   - Limit token scopes to necessary access
+
+3. **Audit Logging:**
+   - The action logs all team creation and update operations
+   - Review action logs regularly for security auditing
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see our contributing guidelines:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/veracode-create-teams-action.git
+cd veracode-create-teams-action
+
+# Install dependencies
+npm install
+
+# Run tests
+npm run test
+
+# Bundle the action
+npm run bundle
+
+# Format code
+npm run format
+
+# Lint code
+npm run lint
+```
+
+### Code Quality Standards
+
+- Minimum 80% test coverage
+- All tests must pass
+- Code must pass linting checks
+- Follow existing code style and conventions
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
+for details.
+
+## 📚 Additional Resources
+
+- [TODO.md](TODO.md) - Original design document
+- [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) - Detailed implementation
+  guide
+- [Veracode Identity API Documentation](https://docs.veracode.com/r/c_identity_intro)
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+
+## 🙋 Support
+
+If you encounter issues:
+
+1. Check the [Troubleshooting](#troubleshooting) section
+2. Review
+   [GitHub Issues](https://github.com/your-org/veracode-create-teams-action/issues)
+3. Open a new issue with:
+   - Full error message
+   - Sanitized action configuration (no secrets)
+   - Steps to reproduce
+   - Expected vs actual behavior
+
+---
+
+**Maintainer:** William Sanders
+
+**Version:** 1.0.0

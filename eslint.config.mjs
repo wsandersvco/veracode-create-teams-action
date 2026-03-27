@@ -49,10 +49,15 @@ export default [
           allowDefaultProject: [
             '__fixtures__/*.ts',
             '__tests__/*.ts',
+            '__tests__/config/*.ts',
+            '__tests__/services/*.ts',
+            '__tests__/utils/*.ts',
+            '__tests__/veracode/*.ts',
             'eslint.config.mjs',
             'jest.config.js',
             'rollup.config.ts'
-          ]
+          ],
+          maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 20
         },
         tsconfigRootDir: import.meta.dirname
       }
