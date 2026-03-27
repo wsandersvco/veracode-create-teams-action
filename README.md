@@ -681,7 +681,7 @@ for details.
 
 ## 📚 Additional Resources
 
-- [TODO.md](TODO.md) - Original design document
+- [Todo.md](Todo.md) - Original design document
 - [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) - Detailed implementation
   guide
 - [Veracode Identity API Documentation](https://docs.veracode.com/r/c_identity_intro)
