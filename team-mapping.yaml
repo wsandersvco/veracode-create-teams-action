@@ -5,7 +5,7 @@ version: '1.0'
 
 # Optional: Default settings applied to all teams unless overridden
 defaults:
-  business_unit: 'Application Security'
+  # business_unit: 'Application Security'
   member_only: false
   auto_add_collaborators: false
   incremental_updates: true
@@ -18,6 +18,26 @@ mappings:
     team_name: 'VeraDemo Java Security Team'
     description: 'Security team for the VeraDemo Java application'
     business_unit: 'Demo Applications'
+    member_only: false
+
+    # Team members with their roles
+    # members:
+      # - user: verainternal_wsanders
+        # relationship: ADMIN
+
+    # Optional: Automatically sync GitHub collaborators
+    sync_github_collaborators: true
+
+    # Optional: Filter which GitHub collaborators to include
+    # Options: 'admin', 'write', 'read'
+    github_collaborator_filter:
+      - admin
+      - write
+
+  verademo-dotnet:
+    team_name: 'VeraDemo DotNet Security Team'
+    description: 'Security team for the VeraDemo DotNet application'
+    # business_unit: 'Demo Applications'
     member_only: false
 
     # Team members with their roles
