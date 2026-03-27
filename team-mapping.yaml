@@ -22,8 +22,8 @@ mappings:
 
     # Team members with their roles
     members:
-      - user: 'verainternal_wsanders'
-        relationship: 'ADMIN'
+      - user: verainternal_wsanders
+        relationship: ADMIN
 
     # Optional: Automatically sync GitHub collaborators
     sync_github_collaborators: false
@@ -31,13 +31,13 @@ mappings:
     # Optional: Filter which GitHub collaborators to include
     # Options: 'admin', 'write', 'read'
     github_collaborator_filter:
-      - 'admin'
-      - 'write'
+      - admin
+      - write
 
 # Optional: Fallback configuration for repositories without explicit mappings
 fallback:
   auto_create: true
   team_name_template: '{repository_name} Security Team'
   default_members:
-    - user: 'verainternal_wsanders'
-      relationship: 'ADMIN'
+    - user: verainternal_wsanders
+      relationship: ADMIN
