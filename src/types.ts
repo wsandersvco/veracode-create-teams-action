@@ -27,8 +27,6 @@ export interface TeamMapping {
 export interface DefaultSettings {
   business_unit?: string
   member_only?: boolean
-  auto_add_collaborators?: boolean
-  incremental_updates?: boolean
 }
 
 export interface FallbackConfiguration {

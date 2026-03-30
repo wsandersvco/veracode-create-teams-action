@@ -216,9 +216,6 @@ version: '1.0'
 # Global default settings (optional)
 defaults:
   business_unit: 'Engineering'
-  member_only: false
-  auto_add_collaborators: true
-  incremental_updates: true
 
 # Repository-to-Team Mappings
 mappings:
@@ -227,7 +224,6 @@ mappings:
     team_name: 'My Application Security Team'
     description: 'Security team for my application'
     business_unit: 'Engineering'
-    member_only: false
     members:
       - user: 'security-admin@example.com'
         relationship: 'ADMIN'
@@ -275,16 +271,12 @@ fallback:
 **Default Settings:**
 
 - `business_unit` (optional): Default business unit for all teams
-- `member_only` (optional): Default member-only flag
-- `auto_add_collaborators` (optional): Auto-add GitHub collaborators by default
-- `incremental_updates` (optional): Use incremental updates by default
 
 **Team Configuration:**
 
 - `team_name` (required): Name of the Veracode team
 - `description` (optional): Team description
 - `business_unit` (optional): Business unit name
-- `member_only` (optional): Member-only flag
 - `members` (required): Array of team members
   - `user` (required): Email address or username
   - `relationship` (required): Either "ADMIN" or "MEMBER"
@@ -428,7 +420,6 @@ version: '1.0'
 
 defaults:
   business_unit: 'Engineering'
-  member_only: false
 
 mappings:
   frontend-app:

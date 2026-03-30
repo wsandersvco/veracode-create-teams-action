@@ -68945,9 +68945,7 @@ const TeamConfigurationSchema = objectType({
 // Zod schema for default settings
 const DefaultSettingsSchema = objectType({
     business_unit: stringType().optional(),
-    member_only: booleanType().optional(),
-    auto_add_collaborators: booleanType().optional(),
-    incremental_updates: booleanType().optional()
+    member_only: booleanType().optional()
 });
 // Zod schema for fallback configuration
 const FallbackConfigurationSchema = objectType({

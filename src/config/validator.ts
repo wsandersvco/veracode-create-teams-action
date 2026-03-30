@@ -34,9 +34,7 @@ const TeamConfigurationSchema = z.object({
 // Zod schema for default settings
 const DefaultSettingsSchema = z.object({
   business_unit: z.string().optional(),
-  member_only: z.boolean().optional(),
-  auto_add_collaborators: z.boolean().optional(),
-  incremental_updates: z.boolean().optional()
+  member_only: z.boolean().optional()
 })
 
 // Zod schema for fallback configuration

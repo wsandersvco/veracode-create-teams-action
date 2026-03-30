@@ -33,9 +33,7 @@ describe('config/validator.ts', () => {
         version: '1.0',
         defaults: {
           business_unit: 'Engineering',
-          member_only: false,
-          auto_add_collaborators: true,
-          incremental_updates: true
+          member_only: false
         },
         mappings: {
           'my-repo': {

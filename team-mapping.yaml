@@ -1,63 +1,284 @@
 # Veracode Team Mapping Configuration
 # Version 1.0 - Schema for mapping GitHub repositories to Veracode teams
+#
+# This configuration file defines how GitHub repositories map to Veracode teams,
+# enabling automatic team creation and member synchronization. The action uses
+# this mapping to ensure teams exist and are properly configured whenever the
+# workflow runs.
 
+# REQUIRED: Schema version for the mapping file
+# Version 1.0 is currently the only supported schema version. This allows for
+# future schema evolution while maintaining backward compatibility.
 version: '1.0'
 
-# Optional: Default settings applied to all teams unless overridden
+# ============================================================================
+# DEFAULTS SECTION (Optional)
+# ============================================================================
+# Default settings applied to all teams unless explicitly overridden in
+# individual team configurations. This section reduces repetition and ensures
+# consistent behavior across teams.
 defaults:
+  # business_unit (string, optional)
+  # Associates all teams with a specific Veracode Business Unit by default.
+  # Business Units help organize teams within the Veracode platform and can be
+  # used for reporting and access control. If specified here, all teams will
+  # inherit this Business Unit unless they define their own.
+  #
+  # Example: 'Application Security'
   # business_unit: 'Application Security'
-  member_only: false
-  auto_add_collaborators: false
-  incremental_updates: true
 
-# Repository-to-team mappings
-# Key: GitHub repository name (supports wildcards with *)
+# ============================================================================
+# MAPPINGS SECTION (Required)
+# ============================================================================
+# Maps GitHub repository names to Veracode team configurations. Each key is a
+# repository name (or pattern) and each value defines the team settings.
+#
+# KEY FEATURES:
+# - Exact matching: Use the exact repository name (e.g., 'my-app')
+# - Wildcard patterns: Use '*' for pattern matching:
+#   - 'api-*' matches all repositories starting with 'api-'
+#   - '*-service' matches all repositories ending with '-service'
+#   - 'app-*-prod' matches repositories like 'app-web-prod', 'app-mobile-prod'
+# - First match wins: The action uses the first matching pattern it finds
 mappings:
-  # Example: Specific repository configuration
+  # -------------------------------------------------------------------------
+  # Example 1: Complete team configuration with GitHub collaborator sync
+  # -------------------------------------------------------------------------
   verademo-java:
+    # team_name (string, required, max 256 characters)
+    # The display name for this team in the Veracode platform. This name must
+    # be unique across your Veracode organization. If a team with this name
+    # already exists, the action will update it instead of creating a new one.
     team_name: 'VeraDemo Java Security Team'
+
+    # description (string, optional)
+    # Human-readable description of the team's purpose and scope. This helps
+    # other users understand what this team is responsible for and appears in
+    # the Veracode platform UI. Use this to document which applications,
+    # services, or security domains this team covers.
     description: 'Security team for the VeraDemo Java application'
+
+    # business_unit (string, optional)
+    # Associates this team with a specific Veracode Business Unit. Business
+    # Units are organizational containers in Veracode that help group teams
+    # for reporting, access control, and administrative purposes. If specified,
+    # this overrides the default business_unit setting. If the Business Unit
+    # doesn't exist in Veracode, the API will return an error.
     business_unit: 'Demo Applications'
-    member_only: false
 
-    # Team members with their roles
+    # members (array, optional, default: empty array)
+    # Explicitly defined team members and their roles. Each member entry
+    # requires a 'user' and 'relationship' field. These members are always
+    # included in the team, regardless of sync_github_collaborators setting.
+    #
+    # Use cases:
+    # - Adding security team members who aren't GitHub collaborators
+    # - Ensuring specific users always have access (e.g., security champions)
+    # - Overriding GitHub permission levels with specific Veracode roles
+    #
+    # Note: Users must exist in the Veracode platform before they can be added.
+    # If a user is not found, they will be skipped and logged in the action
+    # output (members-skipped, skipped-users).
     # members:
-      # - user: verainternal_wsanders
-        # relationship: ADMIN
+    #   # user (string, required)
+    #   # Veracode username or email address. The action validates this against
+    #   # the Veracode platform. Both formats are supported:
+    #   # - Email: 'user@example.com' (recommended, as it's more stable)
+    #   # - Username: 'verainternal_username' (must match Veracode exactly)
+    #   #
+    #   # The action performs the following validations:
+    #   # - User exists in Veracode
+    #   # - User account is active
+    #   # - User account has login enabled
+    #   # Invalid users are skipped and reported in the action outputs.
+    #   - user: verainternal_wsanders
+    #
+    #     # relationship (enum, required)
+    #     # Defines the user's role within the team. Valid values:
+    #     # - 'ADMIN': Team administrator with full permissions to manage team
+    #     #   settings, members, and associated applications. Use this for team
+    #     #   leads or security champions who need to configure the team.
+    #     # - 'MEMBER': Regular team member with standard access to team
+    #     #   resources and applications. Most users should be members unless
+    #     #   they explicitly need administrative capabilities.
+    #     #
+    #     # Important: If a user doesn't have the 'Team Admin' role in Veracode,
+    #     # the action automatically downgrades 'ADMIN' to 'MEMBER' to prevent
+    #     # API errors. This behavior is logged as a warning.
+    #     relationship: ADMIN
 
-    # Optional: Automatically sync GitHub collaborators
+    # sync_github_collaborators (boolean, optional, default: false)
+    # Enables automatic synchronization of GitHub repository collaborators to
+    # the Veracode team. When true, the action fetches all collaborators from
+    # the GitHub repository and attempts to add them to the Veracode team.
+    #
+    # Behavior:
+    # - true: Fetch GitHub collaborators and add them to the team (in addition
+    #   to any explicitly defined members). Use github_collaborator_filter to
+    #   control which permission levels are included.
+    # - false: Only use the explicitly defined 'members' list above.
+    #
+    # Use cases:
+    # - Keeping Veracode teams in sync with GitHub access automatically
+    # - Reducing manual configuration for teams that align with repository access
+    # - Ensuring developers with write access can see scan results
+    #
+    # Note: Collaborators must have a public email address in their GitHub
+    # profile or the action must be able to retrieve their email via the GitHub
+    # API. Users without discoverable emails will be skipped.
     sync_github_collaborators: true
 
-    # Optional: Filter which GitHub collaborators to include
-    # Options: 'admin', 'write', 'read'
+    # github_collaborator_filter (array of strings, optional)
+    # Filters which GitHub collaborators are included when sync_github_collaborators
+    # is enabled. Only collaborators with the specified permission levels are
+    # synchronized to Veracode. If omitted, all collaborators are included.
+    #
+    # Valid permission levels (based on GitHub repository permissions):
+    # - 'admin': Repository administrators (full control)
+    # - 'write': Users with write/push access (can commit code)
+    # - 'read': Users with read-only access (can view repository)
+    #
+    # Best practices:
+    # - Use ['admin', 'write'] to include only users who can modify code
+    # - Use ['admin'] to include only repository administrators
+    # - Use ['admin', 'write', 'read'] or omit this field to include everyone
+    #
+    # Note: This setting is only effective when sync_github_collaborators is true.
+    # The action maps GitHub permissions to Veracode relationships as follows:
+    # - GitHub 'admin' -> Veracode 'ADMIN' (if user has Team Admin role)
+    # - GitHub 'write' -> Veracode 'MEMBER'
+    # - GitHub 'read' -> Veracode 'MEMBER'
     github_collaborator_filter:
       - admin
       - write
 
+  # -------------------------------------------------------------------------
+  # Example 2: Simple team configuration with explicit members only
+  # -------------------------------------------------------------------------
   verademo-dotnet:
+    # Team name - required for all team configurations
     team_name: 'VeraDemo DotNet Security Team'
-    description: 'Security team for the VeraDemo DotNet application'
-    # business_unit: 'Demo Applications'
-    member_only: false
 
-    # Team members with their roles
+    # Description - helps document the team's purpose
+    description: 'Security team for the VeraDemo DotNet application'
+
+    # business_unit is commented out, so this team inherits the default
+    # Business Unit (if one is defined in the defaults section) or has no
+    # Business Unit association (if no default is set).
+    # business_unit: 'Demo Applications'
+
+    # Explicit member list - no GitHub collaborator sync
+    # This team only contains the users listed here, providing full control
+    # over membership without automatic additions from GitHub.
     members:
+      # Single team administrator
       - user: verainternal_wsanders
         relationship: ADMIN
+      # Add more members as needed:
+      # - user: developer@example.com
+      #   relationship: MEMBER
+      # - user: security-lead@example.com
+      #   relationship: ADMIN
 
-    # Optional: Automatically sync GitHub collaborators
+    # Disabled: This team does not automatically sync GitHub collaborators.
+    # All members must be explicitly listed in the 'members' array above.
+    # This gives you full control but requires manual maintenance when team
+    # membership changes.
     sync_github_collaborators: false
 
-    # Optional: Filter which GitHub collaborators to include
-    # Options: 'admin', 'write', 'read'
+    # github_collaborator_filter is specified but has no effect since
+    # sync_github_collaborators is false. It's safe to leave this here if
+    # you plan to enable sync in the future, as it serves as documentation
+    # of your intended filter settings.
     github_collaborator_filter:
       - admin
       - write
 
-# Optional: Fallback configuration for repositories without explicit mappings
+  # -------------------------------------------------------------------------
+  # Additional pattern examples (commented out for reference)
+  # -------------------------------------------------------------------------
+  # Wildcard pattern: All repositories starting with 'api-'
+  # 'api-*':
+  #   team_name: 'API Services Security Team'
+  #   description: 'Centralized security team for all API services'
+  #   sync_github_collaborators: true
+  #   github_collaborator_filter:
+  #     - admin
+  #     - write
+  #   members:
+  #     - user: api-security-lead@example.com
+  #       relationship: ADMIN
+
+  # Wildcard pattern: All repositories ending with '-service'
+  # '*-service':
+  #   team_name: 'Microservices Security Team'
+  #   description: 'Security team for all microservices'
+  #   sync_github_collaborators: true
+  #   members:
+  #     - user: microservices-team@example.com
+  #       relationship: ADMIN
+
+# ============================================================================
+# FALLBACK SECTION (Optional)
+# ============================================================================
+# Defines behavior for repositories that don't match any mapping above. This
+# section enables automatic team creation for new or unmapped repositories,
+# ensuring they still get security coverage even without explicit configuration.
+#
+# Without a fallback configuration, the action will fail if it encounters a
+# repository that doesn't match any mapping pattern.
 fallback:
+  # auto_create (boolean, required when fallback section exists)
+  # Controls whether teams should be automatically created for unmapped repositories:
+  # - true: Create a new team automatically using the template and default members
+  # - false: Fail the action if no mapping is found (strict mode)
+  #
+  # Use cases for true:
+  # - Development environments where new repositories are frequently created
+  # - Organizations that want baseline security coverage for all repositories
+  # - Gradual rollout where explicit mappings are added over time
+  #
+  # Use cases for false:
+  # - Production environments requiring explicit configuration
+  # - Strict compliance requirements where all teams must be pre-approved
+  # - Preventing accidental team creation from typos or test repositories
   auto_create: true
+
+  # team_name_template (string, optional, default: '{repository_name}')
+  # Template string used to generate team names for auto-created teams. The
+  # action substitutes '{repository_name}' with the actual repository name.
+  #
+  # Available placeholders:
+  # - {repository_name}: The name of the GitHub repository
+  #
+  # Examples:
+  # - '{repository_name} Security Team' -> 'my-app Security Team'
+  # - '[AUTO] {repository_name}' -> '[AUTO] my-app'
+  # - '{repository_name} - Veracode' -> 'my-app - Veracode'
+  #
+  # Best practices:
+  # - Use a consistent suffix/prefix to identify auto-created teams
+  # - Keep names descriptive but concise (256 character limit)
+  # - Consider including an indicator that the team was auto-created
   team_name_template: '{repository_name} Security Team'
+
+  # default_members (array, optional, default: empty array)
+  # List of users automatically added to all auto-created teams. This ensures
+  # that fallback teams always have at least one administrator who can manage
+  # the team and configure it properly later.
+  #
+  # Best practices:
+  # - Always include at least one ADMIN to prevent orphaned teams
+  # - Consider adding a security team distribution list
+  # - Include users who are responsible for triaging new repositories
+  #
+  # Note: Same validation rules apply as for the 'members' field in mappings.
+  # Users must exist in Veracode and be active to be added successfully.
   default_members:
     - user: verainternal_wsanders
       relationship: ADMIN
+    # Add additional default members as needed:
+    # - user: security-team@example.com
+    #   relationship: ADMIN
+    # - user: appsec-team@example.com
+    #   relationship: MEMBER
