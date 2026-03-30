@@ -19,10 +19,10 @@ veracode_static_scan:
       - opened
       - synchronize
     target_branch:
-      - default_branch 
-      
+      - default_branch
+
   # If the analysis_on_platform is set to true,
-  # Veracode will save your last scan result, on the default branch, as an application profile with the same name as your scanned repository on the Veracode platform. 
+  # Veracode will save your last scan result, on the default branch, as an application profile with the same name as your scanned repository on the Veracode platform.
   # If the analysis_on_platform is set to false, scan results will not be saved to the Veracode platform.
   # analysis_on_platform runs a sandbox scan on pull_request to default_branch / analysis_branch.
   # analysis_on_platform runs a policy scan on pull_request merge to default_branch / analysis_branch.
@@ -34,7 +34,9 @@ veracode_static_scan:
   break_build_invalid_policy: true
   # If the break_build_on_error is set to true, the build will break if the scan failed to complete in time or with an error and the error_message will be displayed.
   break_build_on_error: false
-  error_message: "Veracode static scan faced a problem. Please contact your Veracode administrator for more information."
+  error_message:
+    'Veracode static scan faced a problem. Please contact your Veracode
+    administrator for more information.'
   # Default policy to be used if a policy isn't already assigned to the application profile.
   policy: 'Veracode Recommended Very High + SCA'
   # If the create_code_scanning_alert is set to true, GitHub security code scanning vulnerability alerts will be created for static findings.
@@ -46,8 +48,8 @@ veracode_static_scan:
   issues:
     trigger: true
     commands:
-      - "Veracode Static Scan"
-      - "veracode-static-scan"
+      - 'Veracode Static Scan'
+      - 'veracode-static-scan'
 
 veracode_sca_scan:
   push:
@@ -66,18 +68,20 @@ veracode_sca_scan:
       - synchronize
     target_branch:
       - default_branch
-  # If the break_build_on_error is set to true, the build will break if the scan failed to complete or with an error, no libraries were found, 
+  # If the break_build_on_error is set to true, the build will break if the scan failed to complete or with an error, no libraries were found,
   # or no build system was found and the error_message will be displayed.
   break_build_on_error: true
   break_build_policy_findings: true
-  error_message: "Veracode SCA scan faced a problem. Please contact your Veracode administrator for more information."
+  error_message:
+    'Veracode SCA scan faced a problem. Please contact your Veracode
+    administrator for more information.'
   # If the trigger is set to true, a scan is triggered when you create an issue containing the commands value or add a comment containing the commands value to an issue.
   # Syntax to be used - COMMANDS_VALUE [branch: BRANCH_NAME]
   issues:
     trigger: true
     commands:
-      - "Veracode SCA Scan"
-      - "veracode-sca-scan"
+      - 'Veracode SCA Scan'
+      - 'veracode-sca-scan'
 
 veracode_iac_secrets_scan:
   push:
@@ -99,14 +103,16 @@ veracode_iac_secrets_scan:
   # If break_build_policy_findings is set to true, the build will break when findings violate the policy.
   break_build_policy_findings: true
   policy: Veracode Recommended High - Container + IaC
-  # If the break_build_on_error is set to true, the build will break if the scan failed to complete or with an error, no libraries were found, 
+  # If the break_build_on_error is set to true, the build will break if the scan failed to complete or with an error, no libraries were found,
   # or no build system was found and the error_message will be displayed.
   break_build_on_error: true
-  error_message: "Veracode IAC secrets scan faced a problem. Please contact your Veracode administrator for more information."
+  error_message:
+    'Veracode IAC secrets scan faced a problem. Please contact your Veracode
+    administrator for more information.'
   # If the trigger is set to true, a scan is triggered when you create an issue containing the commands value or add a comment containing the commands value to an issue.
   # Syntax to be used - COMMANDS_VALUE [branch: BRANCH_NAME]
   issues:
     trigger: true
     commands:
-      - "Veracode IAC Scan"
-      - "veracode-iac-scan"
+      - 'Veracode IAC Scan'
+      - 'veracode-iac-scan'
