@@ -362,7 +362,7 @@ The Veracode instance region. Valid values: `US`, `EU`, `FEDERAL`
 
 - `US`: Commercial US instance (api.veracode.com)
 - `EU`: European instance (api.veracode.eu)
-- `FEDERAL`: US Federal instance (api.fed.veracode.us)
+- `FEDERAL`: US Federal instance (api.veracode.us)
 
 **Example:**
 

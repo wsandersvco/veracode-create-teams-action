@@ -87,7 +87,7 @@ export function getBaseUrl(region: 'US' | 'EU' | 'FEDERAL'): string {
   const baseUrls: Record<'US' | 'EU' | 'FEDERAL', string> = {
     US: 'https://api.veracode.com/api/authn',
     EU: 'https://api.veracode.eu/api/authn',
-    FEDERAL: 'https://api.fed.veracode.us/api/authn'
+    FEDERAL: 'https://api.veracode.us/api/authn'
   }
   return baseUrls[region]
 }

@@ -92516,7 +92516,7 @@ function getBaseUrl(region) {
     const baseUrls = {
         US: 'https://api.veracode.com/api/authn',
         EU: 'https://api.veracode.eu/api/authn',
-        FEDERAL: 'https://api.fed.veracode.us/api/authn'
+        FEDERAL: 'https://api.veracode.us/api/authn'
     };
     return baseUrls[region];
 }

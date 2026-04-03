@@ -69,7 +69,7 @@ describe('veracode/client.ts', () => {
 
       expect(mockAxiosCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          baseURL: 'https://api.fed.veracode.us/api/authn'
+          baseURL: 'https://api.veracode.us/api/authn'
         })
       )
     })
