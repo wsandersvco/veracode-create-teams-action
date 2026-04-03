@@ -33,8 +33,7 @@ export function interpolateTemplate(
 
 /**
  * Sanitizes log output to prevent log injection attacks (CWE-117)
- * Removes or escapes control characters that could be used to forge log entries
- * Specifically targets newline, carriage return, and other control characters
+ * Uses JSON.stringify to escape control characters including newlines and carriage returns
  * @param input - The string to sanitize
  * @returns Sanitized string safe for logging
  */
@@ -43,17 +42,8 @@ export function sanitizeForLog(input: string | undefined | null): string {
     return ''
   }
 
-  // Convert to string and remove/replace dangerous characters
-  let sanitized = String(input)
-
-  // Remove carriage return and line feed to prevent log forging
-  sanitized = sanitized.replace(/\r/g, '')
-  sanitized = sanitized.replace(/\n/g, '')
-
-  // Replace other control characters with space to maintain readability
-  // Control chars: 0x00-0x1F (except \t which is safe) and 0x7F DEL
-  // eslint-disable-next-line no-control-regex
-  sanitized = sanitized.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, ' ')
-
-  return sanitized
+  // JSON.stringify escapes all control characters including \n, \r, \t, etc.
+  // Remove the outer quotes for cleaner log output
+  const stringified = JSON.stringify(String(input))
+  return stringified.slice(1, -1)
 }
