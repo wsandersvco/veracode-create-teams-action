@@ -1,15 +1,44 @@
-name: Build Dist
-on: pull_request
+name: Dependabot Build Dist
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
 jobs:
-  build:
-    if: github.actor == 'dependabot[bot]'
+  build-dist:
+    name: Build dist/ for Dependabot
     runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.head_ref }}
-      - run: npm ci && npm run bundle
-      - uses: stefanzweifel/git-auto-commit-action@v5
+
+      - name: Setup Node.js
+        id: setup-node
+        uses: actions/setup-node@v6
         with:
-          commit_message: 'Rebuild dist files'
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install Dependencies
+        id: npm-ci
+        run: npm ci
+
+      - name: Build dist/ Directory
+        id: build
+        run: npm run bundle
+
+      - name: Commit Updated dist/
+        id: commit
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: rebuild dist/ after dependency updates'
           file_pattern: 'dist/*'
