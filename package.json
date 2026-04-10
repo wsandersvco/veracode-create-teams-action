@@ -73,7 +73,7 @@
     "ts-jest": "29.4.9",
     "ts-jest-resolver": "2.0.1",
     "typescript": "5.9.3",
-    "undici": ">=6.24.0"
+    "undici": "^6.24.0"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "*"
